@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 
 export class Rocks {
@@ -11,13 +12,40 @@ export class Rocks {
     createRocks() {
         const numberOfRocks = 180;
 
-        // Ujevn geometri som passer bedre til naturstein
+        // Ujevn geometri som passer til naturstein
         const geometry = new THREE.IcosahedronGeometry(1, 1);
 
+        // Last inn steinteksturen
+        const textureLoader = new THREE.TextureLoader();
+
+        const rockTexture = textureLoader.load(
+            './textures/rock.png'
+        );
+
+        // Color mapping bruker sRGB
+        rockTexture.colorSpace = THREE.SRGBColorSpace;
+
+        rockTexture.wrapS = THREE.RepeatWrapping;
+        rockTexture.wrapT = THREE.RepeatWrapping;
+        rockTexture.repeat.set(2, 2);
+        rockTexture.anisotropy = 8;
+
+        // Bruk samme bilde til bump mapping
+        const rockBump = rockTexture.clone();
+
+        // Bump mapping skal bruke lineære dataverdier
+        rockBump.colorSpace = THREE.NoColorSpace;
+        rockBump.needsUpdate = true;
+
+        // Materiale med color mapping og bump mapping
         const material = new THREE.MeshStandardMaterial({
             color: 0xffffff,
+            map: rockTexture,
+            bumpMap: rockBump,
+            bumpScale: 0.20,
             roughness: 1,
-            metalness: 0
+            metalness: 0,
+            flatShading: false
         });
 
         // Alle steinene deler samme geometri og materiale
@@ -105,6 +133,8 @@ export class Rocks {
 
         this.scene.add(rocks);
 
-        console.log(`${placed} steiner er plassert!`);
+        console.log(
+            `${placed} steiner med color mapping og bump mapping er plassert!`
+        );
     }
 }

@@ -155,6 +155,32 @@ export class Grass {
             if (this.terrain.getPathFactor(x, z) > 0.05) {
                 continue;
             }
+            // Unngå gress i og helt inntil dammen
+            const poolX = 28;
+            const poolZ = -31;
+            const poolRadius = 7;
+
+            // Beregn avstanden til midten av dammen
+            const distanceToPool = Math.sqrt(
+                (x - poolX) ** 2 +
+                (z - poolZ) ** 2
+            );
+
+            // Ikke plasser gress i dammen
+            if (distanceToPool < poolRadius) {
+                continue;
+            }
+            // Ikke plasser gress under vannoverflaten
+            const waterLevel = this.terrain.getPoolWaterLevel() - 1.0;
+        
+
+            if (
+                distanceToPool < 9 &&
+                this.terrain.getHeight(x, z) < waterLevel + 0.35
+            ) {
+                continue;
+            }
+            
 
             const y = this.terrain.getHeight(x, z);
 

@@ -2,10 +2,11 @@
 import * as THREE from 'three';
 
 export class PlayerController {
-    constructor(camera, terrain, domElement) {
+    constructor(camera, terrain, domElement, collisionManager) {
         this.camera = camera;
         this.terrain = terrain;
         this.domElement = domElement;
+        this.collisionManager = collisionManager;
 
         this.moveSpeed = 8;
         this.playerHeight = 1.7;
@@ -73,10 +74,37 @@ export class PlayerController {
                 this.yaw
             );
 
-            this.camera.position.addScaledVector(
-                direction,
+
+            const movement = direction.multiplyScalar(
                 this.moveSpeed * deltaTime
             );
+
+
+            const currentX = this.camera.position.x;
+            const currentZ = this.camera.position.z;
+
+            const nextX = currentX + movement.x;
+
+            if (this.collisionManager.canMove(
+                currentX,
+                currentZ,
+                nextX,
+                currentZ
+            )) {
+                this.camera.position.x = nextX;
+            }
+
+            const nextZ = this.camera.position.z + movement.z;
+
+            if (this.collisionManager.canMove(
+                this.camera.position.x,
+                currentZ,
+                this.camera.position.x,
+                nextZ
+            )) {
+                this.camera.position.z = nextZ;
+            }
+
         }
 
         // Hold spilleren innenfor terrenget
