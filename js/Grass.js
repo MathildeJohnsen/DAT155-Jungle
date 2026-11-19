@@ -17,7 +17,7 @@ export class Grass {
         const colors = [];
 
         const bladeCount = 8;
-        const segments = 3;
+        const segments = 2;
 
         // Lag en gresstust med smale, buede blader
         for (let i = 0; i < bladeCount; i++) {

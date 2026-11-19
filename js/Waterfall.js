@@ -24,7 +24,7 @@ export class Waterfall {
     createRockMaterials() {
         const loader = new THREE.TextureLoader();
 
-        const rockTexture = loader.load('./textures/rock.png');
+        const rockTexture = loader.load('./textures/Rock.png');
         const mossTexture = loader.load('./textures/moss.png');
 
         rockTexture.colorSpace = THREE.SRGBColorSpace;
@@ -75,7 +75,7 @@ export class Waterfall {
         // Last inn teksturer
         const loader = new THREE.TextureLoader();
 
-        const rockTexture = loader.load('./textures/rock.png');
+        const rockTexture = loader.load('./textures/RockColor.jpg');
         const mossTexture = loader.load('./textures/moss.png');
 
         rockTexture.colorSpace = THREE.SRGBColorSpace;
@@ -88,16 +88,13 @@ export class Waterfall {
             texture.anisotropy = 8;
         }
 
-        const rockBump = rockTexture.clone();
-        rockBump.colorSpace = THREE.NoColorSpace;
-        rockBump.needsUpdate = true;
+       
 
         // Shader som blander stein og mose
         const createMossMaterial = () => {
             const material = new THREE.MeshStandardMaterial({
                 map: rockTexture,
-                bumpMap: rockBump,
-                bumpScale: 0.15,
+                color: 0xb0b0b0,
                 roughness: 1,
                 metalness: 0,
                 flatShading: false
@@ -802,98 +799,85 @@ void main() {
     }
 
 
+
     createPoolRocks() {
         const poolX = this.x;
         const poolZ = this.z + 4;
-
-        const waterLevel =
-            this.terrain.getPoolWaterLevel() - 1.0;
-
-        const poolRockTexture = new THREE.TextureLoader().load(
-            './textures/rock.png'
+    
+        // Last inn steintekstur
+        const rockTexture = new THREE.TextureLoader().load(
+            './textures/RockColor.jpg'
         );
-
-        poolRockTexture.colorSpace = THREE.SRGBColorSpace;
-        poolRockTexture.wrapS = THREE.RepeatWrapping;
-        poolRockTexture.wrapT = THREE.RepeatWrapping;
-        poolRockTexture.repeat.set(1, 1);
-        poolRockTexture.anisotropy = 8;
-
+    
+        rockTexture.colorSpace = THREE.SRGBColorSpace;
+        rockTexture.wrapS = THREE.RepeatWrapping;
+        rockTexture.wrapT = THREE.RepeatWrapping;
+        rockTexture.anisotropy = 8;
+    
         const rockMaterial = new THREE.MeshStandardMaterial({
-            map: poolRockTexture,
+            map: rockTexture,
+            color: 0xffffff,
             roughness: 1,
             metalness: 0,
             flatShading: false
         });
-
-        rockMaterial.bumpMap = null;
-        rockMaterial.bumpScale = 0;
-        rockMaterial.needsUpdate = true;
-
+    
         const rockGroup = new THREE.Group();
-
+    
+        // Generer steiner tilfeldig rundt dammen
         const numberOfRocks = 65;
-
+    
         for (let i = 0; i < numberOfRocks; i++) {
+    
+            // Tilfeldig plassering rundt dammen
             const angle = Math.random() * Math.PI * 2;
-
-            // Ujevn plassering rundt dammen
-            const radius =
-                4.2 +
-                Math.random() * 1.6 +
-                Math.sin(angle * 5) * 0.3;
-
+            const radius = 4.5 + Math.random() * 2.0;
+    
             const x = poolX + Math.cos(angle) * radius;
             const z = poolZ + Math.sin(angle) * radius;
-
+    
+            // Finn høyden på terrenget
             const groundY = this.terrain.getHeight(x, z);
-
-            // Bruk den opprinnelige steingeometrien
+    
+            // Opprett stein
             const geometry = new THREE.IcosahedronGeometry(1, 1);
-
-            const rock = new THREE.Mesh(
-                geometry,
-                rockMaterial
-
-            );
-            rock.castShadow = true;
-            rock.receiveShadow = true;
-
-            // Varier steinenes størrelse
-            const size = 0.3 + Math.random() * 0.7;
-
-            // Mer avrundede steiner
+            const rock = new THREE.Mesh(geometry, rockMaterial);
+    
+            // Tilfeldig størrelse og form
+            const size = 0.3 + Math.random() * 0.6;
+    
             rock.scale.set(
-                size * (0.8 + Math.random() * 0.4),
-                size * (0.7 + Math.random() * 0.3),
-                size * (0.8 + Math.random() * 0.4)
+                size * (1.2 + Math.random() * 0.5),
+                size * (0.5 + Math.random() * 0.4),
+                size * (0.9 + Math.random() * 0.5)
             );
-
-            // Senk steinene litt ned i terrenget
+    
+            // Plasser steinen delvis ned i terrenget
             rock.position.set(
                 x,
-                Math.max(groundY, waterLevel - 0.3) - size * 0.2,
+                groundY - size * 0.2,
                 z
             );
-
+    
+            // Tilfeldig rotasjon
             rock.rotation.set(
                 Math.random() * 0.3,
                 Math.random() * Math.PI * 2,
                 Math.random() * 0.3
             );
-
-            rock.castShadow = false;
-            rock.receiveShadow = false;
-
+    
+            // Skygger
+            rock.castShadow = true;
+            rock.receiveShadow = true;
+    
             rockGroup.add(rock);
         }
-
+    
+        // Legg steinene til scenen
         this.scene.add(rockGroup);
         this.poolRocks = rockGroup;
-
-        console.log(
-            'Steiner rundt dammen med steintekstur og mose er opprettet!'
-        );
+    
+        console.log('65 steiner rundt dammen er opprettet!');
     }
 
 

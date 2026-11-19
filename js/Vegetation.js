@@ -1,6 +1,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 
 export class Vegetation {
     constructor(scene, terrain, wind, collisionManager) {
@@ -14,6 +15,33 @@ export class Vegetation {
         this.loadElephantEarPlants();
         this.loadAdditionalVegetation();
     }
+
+    // Teller meshes og triangles i en GLB-modell.
+    logModelStats(name, object) {
+        let meshes = 0;
+        let triangles = 0;
+
+        object.traverse((child) => {
+            if (!child.isMesh) return;
+
+            meshes++;
+
+            const geometry = child.geometry;
+
+            if (geometry.index) {
+                triangles += geometry.index.count / 3;
+            } else if (geometry.attributes.position) {
+                triangles +=
+                    geometry.attributes.position.count / 3;
+            }
+        });
+
+        console.log(
+            `${name}: ${meshes} meshes, ` +
+            `${Math.round(triangles).toLocaleString('no-NO')} triangles`
+        );
+    }
+
 
     // Beregner kollisjon fra geometrien nær trestammen.
 
@@ -138,6 +166,7 @@ export class Vegetation {
     // Store jungeltrær med lianer.
     loadTrees() {
         const loader = new GLTFLoader();
+        const modifier = new SimplifyModifier();
 
         loader.load(
             './models/jungle-tree/source/jungle_tree.glb',
@@ -145,10 +174,38 @@ export class Vegetation {
             (gltf) => {
                 const originalTree = gltf.scene;
 
+                this.logModelStats('Jungeltre', originalTree);
+
                 originalTree.traverse((child) => {
                     if (child.isMesh) {
                         child.castShadow = false;
                         child.receiveShadow = false;
+                    }
+                });
+
+                // Lag en forenklet versjon av tremodellen
+                const lowDetailTree = originalTree.clone(true);
+
+                lowDetailTree.traverse((child) => {
+                    if (!child.isMesh) return;
+
+                    const geometry = child.geometry;
+                    const position = geometry.attributes.position;
+
+                    if (!position || position.count < 100) return;
+
+                    try {
+                        const simplifiedGeometry = modifier.modify(
+                            geometry.clone(),
+                            Math.floor(position.count * 0.5)
+                        );
+
+                        child.geometry = simplifiedGeometry;
+                    } catch (error) {
+                        console.warn(
+                            'Kunne ikke forenkle en del av treet:',
+                            error
+                        );
                     }
                 });
 
@@ -165,30 +222,49 @@ export class Vegetation {
                     const x = (Math.random() - 0.5) * 180;
                     const z = (Math.random() - 0.5) * 180;
 
+                    // Beregn avstand til midten av stien
+                    const pathX = this.terrain.getPathX(z);
+                    const distanceToPath = Math.abs(x - pathX);
+
+                    // Hold trærne minst 6 enheter fra midten av stien
+                    if (distanceToPath < 6) {
+                        continue;
+                    }
+
+                    // Behold den opprinnelige stisjekken
                     if (this.terrain.getPathFactor(x, z) > 0.05) {
                         continue;
                     }
 
+                    // Unngå trær rundt dammen
                     if (this.isNearPool(x, z)) {
                         continue;
                     }
 
-                    const tree = originalTree.clone();
-
-                    const y = this.terrain.getHeight(x, z);
-                    tree.position.set(x, y, z);
-
                     const scale = 0.7 + Math.random() * 0.6;
-                    tree.scale.setScalar(scale);
+                    const rotation = Math.random() * Math.PI * 2;
+                    const y = this.terrain.getHeight(x, z);
 
-                    tree.rotation.y = Math.random() * Math.PI * 2;
+                    // Opprett LOD-objekt
+                    const lod = new THREE.LOD();
 
-                    this.scene.add(tree);
+                    const highDetail = originalTree.clone(true);
+                    const lowDetail = lowDetailTree.clone(true);
 
-                    // Kollisjon rundt stammen.
-                    this.addTrunkCollision(
-                        tree,
-                        'cypreschauve_bark_D',
+                    lod.addLevel(highDetail, 0);
+                    lod.addLevel(lowDetail, 35);
+
+                    lod.position.set(x, y, z);
+                    lod.scale.setScalar(scale);
+                    lod.rotation.y = rotation;
+
+                    this.scene.add(lod);
+
+                    // Kollisjon rundt stammen
+                    this.collisionManager.addCircle(
+                        x,
+                        z,
+                        0.8 * scale,
                         y
                     );
 
@@ -196,7 +272,7 @@ export class Vegetation {
                 }
 
                 console.log(
-                    `${placedTrees} jungeltrær er plassert!`
+                    `${placedTrees} jungeltrær er plassert med LOD!`
                 );
             },
 
@@ -220,6 +296,7 @@ export class Vegetation {
 
             (gltf) => {
                 const original = gltf.scene;
+                this.logModelStats('Busk', original);
                 original.updateMatrixWorld(true);
 
                 const meshes = [];
@@ -391,6 +468,7 @@ export class Vegetation {
 
             (gltf) => {
                 const original = gltf.scene;
+                this.logModelStats('Elephant ear', original);
                 original.updateMatrixWorld(true);
 
                 const meshes = [];
@@ -565,30 +643,37 @@ export class Vegetation {
         );
     }
 
-    // Palmer, monstera og bananplanter.
+
+
+    // Palmer, monstera og bananplanter med LOD.
     loadAdditionalVegetation() {
         const models = [
             {
                 file: 'palm_trees.glb',
                 count: 150,
                 minHeight: 8,
-                maxHeight: 54
+                maxHeight: 54,
+                lodDistance: 45
             },
             {
                 file: 'monstera_tree.glb',
                 count: 130,
                 minHeight: 1,
-                maxHeight: 5.5
+                maxHeight: 5.5,
+                lodDistance: 20
             },
+
             {
                 file: 'banana_plant.glb',
                 count: 145,
                 minHeight: 12,
-                maxHeight: 18
+                maxHeight: 18,
+                lodDistance: 35
             }
         ];
 
         const loader = new GLTFLoader();
+        const modifier = new SimplifyModifier();
 
         models.forEach((model) => {
             loader.load(
@@ -596,32 +681,59 @@ export class Vegetation {
 
                 (gltf) => {
                     const original = gltf.scene;
+                    this.logModelStats(model.file, original);
 
                     original.traverse((child) => {
-                        if (child.isMesh) {
-                            child.castShadow = true;
-                            child.receiveShadow = true;
+                        if (!child.isMesh) return;
 
-                            if (model.file === 'monstera_tree.glb') {
-                                const fixMaterial = (material) => {
-                                    const mat = material.clone();
+                        child.castShadow = true;
+                        child.receiveShadow = true;
 
-                                    if (mat.emissive) {
-                                        mat.emissive.set(0x000000);
-                                        mat.emissiveIntensity = 0;
-                                    }
+                        if (model.file === 'monstera_tree.glb') {
+                            const fixMaterial = (material) => {
+                                const mat = material.clone();
 
-                                    return mat;
-                                };
-
-                                if (Array.isArray(child.material)) {
-                                    child.material =
-                                        child.material.map(fixMaterial);
-                                } else if (child.material) {
-                                    child.material =
-                                        fixMaterial(child.material);
+                                if (mat.emissive) {
+                                    mat.emissive.set(0x000000);
+                                    mat.emissiveIntensity = 0;
                                 }
+
+                                return mat;
+                            };
+
+                            if (Array.isArray(child.material)) {
+                                child.material =
+                                    child.material.map(fixMaterial);
+                            } else if (child.material) {
+                                child.material =
+                                    fixMaterial(child.material);
                             }
+                        }
+                    });
+
+                    // Lag én forenklet modell som gjenbrukes.
+                    const lowDetailOriginal = original.clone(true);
+
+                    lowDetailOriginal.traverse((child) => {
+                        if (!child.isMesh) return;
+
+                        const geometry = child.geometry;
+                        const position = geometry.attributes.position;
+
+                        if (!position || position.count < 100) return;
+
+                        try {
+                            const simplified = modifier.modify(
+                                geometry.clone(),
+                                Math.floor(position.count * 0.5)
+                            );
+
+                            child.geometry = simplified;
+                        } catch (error) {
+                            console.warn(
+                                `Kunne ikke forenkle ${model.file}:`,
+                                error
+                            );
                         }
                     });
 
@@ -658,49 +770,62 @@ export class Vegetation {
                             continue;
                         }
 
-                        const plant = original.clone();
-
                         const desiredHeight =
                             model.minHeight +
                             Math.random() *
                             (model.maxHeight - model.minHeight);
 
                         const scale = desiredHeight / size.y;
-                        plant.scale.setScalar(scale);
+                        const rotation = Math.random() * Math.PI * 2;
 
-                        plant.rotation.y =
-                            Math.random() * Math.PI * 2;
+                        // Opprett to detaljnivåer.
+                        const highDetail = original.clone(true);
+                        const lowDetail = lowDetailOriginal.clone(true);
+
+                        const lod = new THREE.LOD();
+
+                        lod.addLevel(highDetail, 0);
+                        lod.addLevel(lowDetail, model.lodDistance);
+
+                        lod.scale.setScalar(scale);
+                        lod.rotation.y = rotation;
 
                         // Finn modellens bunn etter skalering.
                         const box =
-                            new THREE.Box3().setFromObject(plant);
+                            new THREE.Box3().setFromObject(lod);
 
                         const groundY =
                             this.terrain.getHeight(x, z);
 
                         let y = groundY - box.min.y;
 
-                        // Senk palmene litt ned i bakken.
-                        if (model.file === 'palm_trees.glb') {
+                        if (
+                            model.file === 'palm_trees.glb' ||
+                            model.file === 'monstera_tree.glb'
+                        ) {
                             y -= desiredHeight * 0.08;
                         }
 
-                        plant.position.set(x, y, z);
+                        lod.position.set(x, y, z);
 
-                        this.scene.add(plant);
+                        this.scene.add(lod);
 
-                        // Kollisjon fra geometrien nær palmens stamme.
+                        // Kollisjon rundt stammene.
+                        // Bruk LOD-objektet, som har riktig
+                        // posisjon, rotasjon og skalering.
                         if (model.file === 'palm_trees.glb') {
                             this.addTrunkCollision(
-                                plant,
+                                lod,
                                 'palm001_Palm_Hamza_0',
                                 groundY
                             );
                         }
+
                         if (model.file === 'banana_plant.glb') {
-                            this.addTrunkCollision(
-                                plant,
-                                '',
+                            this.collisionManager.addCircle(
+                                x,
+                                z,
+                                0.1 * scale,
                                 groundY
                             );
                         }
@@ -709,7 +834,7 @@ export class Vegetation {
                     }
 
                     console.log(
-                        `${placed} objekter fra ${model.file} er plassert!`
+                        `${placed} objekter fra ${model.file} er plassert med LOD!`
                     );
                 },
 

@@ -1,6 +1,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 
 export class Undergrowth {
     constructor(scene, terrain) {
@@ -18,6 +19,27 @@ export class Undergrowth {
 
             (gltf) => {
                 const original = gltf.scene;
+                let meshCount = 0;
+                let triangleCount = 0;
+
+                original.traverse((child) => {
+                    if (!child.isMesh) return;
+
+                    meshCount++;
+
+                    const geometry = child.geometry;
+
+                    if (geometry.index) {
+                        triangleCount += geometry.index.count / 3;
+                    } else if (geometry.attributes.position) {
+                        triangleCount += geometry.attributes.position.count / 3;
+                    }
+                });
+
+                console.log(
+                    `Bregnemodell: ${meshCount} meshes, ` +
+                    `${Math.round(triangleCount)} triangles`
+                );
 
                 // Aktiver skygger på modellen
 
@@ -64,9 +86,33 @@ export class Undergrowth {
                 original.position.y += size.y / 2;
 
 
-                const fernCount = 280;
+                // Lag en forenklet modell til LOD
+                const modifier = new SimplifyModifier();
+                const lowDetail = original.clone(true);
+
+                lowDetail.traverse((child) => {
+                    if (!child.isMesh) return;
+
+                    const geometry = child.geometry;
+                    const vertexCount = geometry.attributes.position.count;
+
+                    // Behold omtrent 25 % av vertices
+                    const targetCount = Math.max(
+                        4,
+                        Math.floor(vertexCount * 0.25)
+                    );
+
+                    child.geometry = modifier.modify(
+                        geometry.clone(),
+                        targetCount
+                    );
+                });
+
+
+
                 const groupCount = 30;
-                const fernsPerGroup = fernCount / groupCount;
+                const fernsPerGroup = 10;
+                const fernCount = groupCount * (fernsPerGroup + 1);
 
                 // Opprett grupper av bregner
                 for (let group = 0; group < groupCount; group++) {
@@ -80,7 +126,15 @@ export class Undergrowth {
 
                     for (let i = 0; i < fernsPerGroup; i++) {
 
-                        const fern = original.clone(true);
+
+                        const fern = new THREE.LOD();
+
+                        const highDetail = original.clone(true);
+                        const simplified = lowDetail.clone(true);
+
+                        fern.addLevel(highDetail, 0);
+                        fern.addLevel(simplified, 12);
+
 
                         // Fordel bregnene rundt gruppens sentrum
                         const angle = Math.random() * Math.PI * 2;
@@ -111,43 +165,51 @@ export class Undergrowth {
                         );
 
                         this.scene.add(fern);
-                    
+
+                    }
+
+                    console.log('Bregner plassert i naturlige grupper!');
+
+
+                    const fern = new THREE.LOD();
+
+                    const highDetail = original.clone(true);
+                    const simplified = lowDetail.clone(true);
+
+                    fern.addLevel(highDetail, 0);
+                    fern.addLevel(simplified, 12);
+
+
+                    const x = (Math.random() - 0.5) * 100;
+                    const z = (Math.random() - 0.5) * 100;
+
+                    const groundY = this.terrain.getHeight(x, z);
+
+                    // Ulik størrelse på plantene
+                    const variation = 0.5 + Math.random() * 0.6;
+                    const scale = baseScale * variation;
+
+                    fern.scale.setScalar(scale);
+
+                    fern.rotation.y = Math.random() * Math.PI * 2;
+
+                    fern.position.set(
+                        x,
+                        groundY + 0.02,
+                        z
+                    );
+
+                    this.scene.add(fern);
                 }
 
-                console.log('Bregner plassert i naturlige grupper!');
-
-                const fern = original.clone(true);
-
-                const x = (Math.random() - 0.5) * 100;
-                const z = (Math.random() - 0.5) * 100;
-
-                const groundY = this.terrain.getHeight(x, z);
-
-                // Ulik størrelse på plantene
-                const variation = 0.5 + Math.random() * 0.6;
-                const scale = baseScale * variation;
-
-                fern.scale.setScalar(scale);
-
-                fern.rotation.y = Math.random() * Math.PI * 2;
-
-                fern.position.set(
-                    x,
-                    groundY + 0.02,
-                    z
-                );
-
-                this.scene.add(fern);
-            }
-
-                console.log('180 bregner er lagt til i jungelen!');
-    },
+                console.log(`${fernCount} bregner er lagt til i jungelen!`);
+            },
 
             undefined,
 
-    (error) => {
-        console.error('Kunne ikke laste ferns.glb:', error);
-    }
+            (error) => {
+                console.error('Kunne ikke laste ferns.glb:', error);
+            }
         );
     }
 }

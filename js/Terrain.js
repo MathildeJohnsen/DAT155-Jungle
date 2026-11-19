@@ -116,88 +116,21 @@ export class Terrain {
         geometry.rotateX(-Math.PI / 2);
 
         const positions = geometry.attributes.position;
-        const colors = [];
-
-        // Flere naturlige farger til jungelbunnen
-        const darkGreen = new THREE.Color(0x29472a);
-        const mossGreen = new THREE.Color(0x3d6135);
-        const lightGreen = new THREE.Color(0x527443);
-        const earthyGreen = new THREE.Color(0x4b5732);
-
-        // Jordfarger til stien
-        const darkDirt = new THREE.Color(0x493827);
-        const brownDirt = new THREE.Color(0x765239);
-        const lightDirt = new THREE.Color(0x8a6849);
+        
 
         for (let i = 0; i < positions.count; i++) {
             const x = positions.getX(i);
             const z = positions.getZ(i);
-
-            // Behold den eksisterende terrengformen
+        
+            // Beregn høyden til hvert vertex
             const height = this.getHeight(x, z);
             positions.setY(i, height);
-
-            // Store og små variasjoner i bakken
-            const variation =
-                Math.sin(x * 0.18) * Math.cos(z * 0.15) * 0.5 +
-                Math.sin(x * 0.47 + z * 0.29) * 0.25 +
-                Math.cos(z * 0.55 - x * 0.22) * 0.25;
-
-            const blend = THREE.MathUtils.clamp(
-                (variation + 1) / 2,
-                0,
-                1
-            );
-
-            // Bland forskjellige grønntoner
-            const grassColor = darkGreen.clone();
-
-            grassColor.lerp(mossGreen, blend);
-
-            if (variation > 0.25) {
-                grassColor.lerp(lightGreen, 0.35);
-            }
-
-            if (variation < -0.3) {
-                grassColor.lerp(earthyGreen, 0.4);
-            }
-
-            // Variasjon i jordfargen på stien
-            const dirtVariation =
-                Math.sin(x * 0.8 + z * 0.4) * 0.5 +
-                Math.cos(z * 0.65) * 0.5;
-
-            const dirtBlend = THREE.MathUtils.clamp(
-                (dirtVariation + 1) / 2,
-                0,
-                1
-            );
-
-            const dirtColor = darkDirt.clone();
-            dirtColor.lerp(brownDirt, dirtBlend);
-
-            if (dirtVariation > 0.4) {
-                dirtColor.lerp(lightDirt, 0.3);
-            }
-
-            // Bland jord og vegetasjon langs stien
-            const pathFactor = this.getPathFactor(x, z);
-
-            grassColor.lerp(dirtColor, pathFactor);
-
-            colors.push(
-                grassColor.r,
-                grassColor.g,
-                grassColor.b
-            );
         }
 
         positions.needsUpdate = true;
+        geometry.computeVertexNormals();
 
-        geometry.setAttribute(
-            'color',
-            new THREE.Float32BufferAttribute(colors, 3)
-        );
+        
 
         // Last inn teksturer
         const textureLoader = new THREE.TextureLoader();
@@ -214,7 +147,7 @@ export class Terrain {
         for (const texture of [grassTexture, dirtTexture]) {
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(40, 40);
+            texture.repeat.set(1, 1);
             texture.colorSpace = THREE.SRGBColorSpace;
             texture.anisotropy = 8;
         }
@@ -267,7 +200,7 @@ export class Terrain {
             vUv = uv;
             vPathFactor = pathFactor;
 
-            vNormal = normalize(normalMatrix * normal);
+            vNormal = normalize(mat3(modelMatrix) * normal);
 
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
             gl_Position = projectionMatrix * mvPosition;
